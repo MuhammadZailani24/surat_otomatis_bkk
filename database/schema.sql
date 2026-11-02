@@ -1,0 +1,111 @@
+CREATE DATABASE IF NOT EXISTS db_surat_bkk CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE db_surat_bkk;
+
+CREATE TABLE IF NOT EXISTS users (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ nama VARCHAR(150) NOT NULL, username VARCHAR(80) NOT NULL UNIQUE,
+ password_hash VARCHAR(255) NOT NULL, role ENUM('admin','operator') NOT NULL DEFAULT 'operator',
+ active TINYINT(1) NOT NULL DEFAULT 1, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS kapal (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ nama_kapal VARCHAR(180) NOT NULL, nomor_imo VARCHAR(30) NULL,
+ kebangsaan VARCHAR(100) NULL, grt VARCHAR(40) NULL,
+ active TINYINT(1) NOT NULL DEFAULT 1,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS keagenan (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ nama_agen VARCHAR(180) NOT NULL, alamat TEXT NULL, kontak VARCHAR(100) NULL,
+ active TINYINT(1) NOT NULL DEFAULT 1,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS pejabat (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ nama VARCHAR(150) NOT NULL, nip VARCHAR(30) NULL, jabatan VARCHAR(200) NOT NULL,
+ active TINYINT(1) NOT NULL DEFAULT 1,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS penerbitan (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ kode_paket VARCHAR(70) NOT NULL UNIQUE,
+ nomor_st VARCHAR(120) NOT NULL UNIQUE, nomor_sppd VARCHAR(120) NOT NULL UNIQUE,
+ nama_kegiatan TEXT NOT NULL, maksud_perjalanan TEXT NOT NULL,
+ tanggal_surat DATE NOT NULL, tanggal_tugas DATE NOT NULL, tanggal_ttd DATE NOT NULL,
+ tanggal_pemeriksaan DATE NOT NULL, tanggal_berangkat DATE NOT NULL, tanggal_kembali DATE NOT NULL,
+ tanggal_pernyataan DATE NOT NULL,
+ tempat_berangkat VARCHAR(150) NOT NULL DEFAULT 'Banjarmasin',
+ tujuan VARCHAR(200) NOT NULL, lama_hari INT UNSIGNED NOT NULL,
+ pejabat_st_id BIGINT UNSIGNED NULL, pejabat_ppk_id BIGINT UNSIGNED NULL,
+ snapshot_pejabat_st JSON NULL, snapshot_pejabat_ppk JSON NULL,
+ status ENUM('draft','siap','diterbitkan','batal') NOT NULL DEFAULT 'draft',
+ created_by BIGINT UNSIGNED NOT NULL,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+ FOREIGN KEY (created_by) REFERENCES users(id),
+ FOREIGN KEY (pejabat_st_id) REFERENCES pejabat(id) ON DELETE SET NULL,
+ FOREIGN KEY (pejabat_ppk_id) REFERENCES pejabat(id) ON DELETE SET NULL,
+ INDEX idx_status_created (status, created_at)
+) ENGINE=InnoDB;
+
+-- Petugas SELALU diinput manual per penerbitan; tidak ada tabel master pegawai.
+CREATE TABLE IF NOT EXISTS penerbitan_petugas (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ penerbitan_id BIGINT UNSIGNED NOT NULL,
+ urutan TINYINT UNSIGNED NOT NULL,
+ nama VARCHAR(150) NOT NULL, nip VARCHAR(30) NOT NULL,
+ pangkat_golongan VARCHAR(120) NOT NULL, jabatan VARCHAR(200) NOT NULL,
+ UNIQUE KEY unique_petugas_urutan (penerbitan_id, urutan),
+ FOREIGN KEY (penerbitan_id) REFERENCES penerbitan(id) ON DELETE CASCADE,
+ CHECK (urutan BETWEEN 1 AND 2)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS penerbitan_kapal (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ penerbitan_id BIGINT UNSIGNED NOT NULL,
+ urutan TINYINT UNSIGNED NOT NULL,
+ kapal_id BIGINT UNSIGNED NULL, keagenan_id BIGINT UNSIGNED NULL,
+ nama_kapal VARCHAR(180) NOT NULL, nama_agen VARCHAR(180) NOT NULL,
+ posisi_labuh VARCHAR(200) NOT NULL,
+ kebangsaan VARCHAR(100), grt VARCHAR(40), nomor_imo VARCHAR(30),
+ nama_nakhoda VARCHAR(150) NOT NULL,
+ jabatan_nakhoda VARCHAR(100) NOT NULL DEFAULT 'Nakhoda',
+ status_pemeriksaan ENUM('memenuhi','tidak_memenuhi','belum_ditetapkan') NOT NULL DEFAULT 'belum_ditetapkan',
+ rekomendasi TEXT NULL,
+ UNIQUE KEY unique_kapal_urutan (penerbitan_id, urutan),
+ FOREIGN KEY (penerbitan_id) REFERENCES penerbitan(id) ON DELETE CASCADE,
+ FOREIGN KEY (kapal_id) REFERENCES kapal(id) ON DELETE SET NULL,
+ FOREIGN KEY (keagenan_id) REFERENCES keagenan(id) ON DELETE SET NULL,
+ CHECK (urutan BETWEEN 1 AND 2)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS template_dokumen (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ kode VARCHAR(40) NOT NULL, nama VARCHAR(150) NOT NULL,
+ path_file VARCHAR(300) NOT NULL, versi INT UNSIGNED NOT NULL DEFAULT 1,
+ active TINYINT(1) NOT NULL DEFAULT 1,
+ UNIQUE KEY unique_template_versi (kode, versi)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS dokumen_arsip (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ penerbitan_id BIGINT UNSIGNED NOT NULL,
+ jenis ENUM('docx','pdf') NOT NULL,
+ nama_file VARCHAR(255) NOT NULL, path_file VARCHAR(500) NOT NULL,
+ sha256 CHAR(64) NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY (penerbitan_id) REFERENCES penerbitan(id),
+ UNIQUE KEY unique_arsip (penerbitan_id, jenis)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS log_aktivitas (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ user_id BIGINT UNSIGNED NULL, penerbitan_id BIGINT UNSIGNED NULL,
+ aksi VARCHAR(100) NOT NULL, keterangan TEXT NULL,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+ FOREIGN KEY (penerbitan_id) REFERENCES penerbitan(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
